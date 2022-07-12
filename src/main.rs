@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, io};
 
 fn main() {
     let arg_result = env::args().nth(1);
@@ -7,38 +7,39 @@ fn main() {
     // If path specified, give priority
     // If no path specified, try working directory
     // If working directory failed, ask for path and quit
-    match (arg_result, current_dir_result) {
-        (Some(path), _) => read_dir(path),
-        (None, Ok(current_dir)) => read_dir(current_dir.to_str().unwrap().into()),
-        _ => eprintln!("Please specify a directory path"),
+    let read_result = match (arg_result, current_dir_result) {
+        (Some(path), _) => read_dir(&path),
+        (None, Ok(current_dir)) => read_dir(current_dir.to_str().unwrap()),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Please specify a directory path",
+        )),
+    };
+
+    match read_result {
+        Ok(file_list) => {
+            let file_count = file_list.len();
+            println!("Found {file_count} entries\n---------------");
+
+            for file_name in file_list.iter() {
+                println!("{file_name}");
+            }
+        }
+        Err(e) => eprintln!("{}", e),
     }
 }
 
-fn read_dir(path: String) {
-    // Read directory's contents
-    let read_dir_result = fs::read_dir(path);
+fn read_dir(path: &str) -> Result<Vec<String>, io::Error> {
+    let mut file_list = Vec::new();
 
-    match read_dir_result {
-        Ok(dir_contents) => {
-            let mut count = 0;
-            let mut final_output: Vec<String> = vec![];
-
-            // Parse entries and count # of entries
-            for dir_entry in dir_contents {
-                if let Ok(entry) = dir_entry {
-                    count += 1;
-                    final_output.push(entry.file_name().to_str().unwrap().into());
-                }
+    let dir_contents = fs::read_dir(path)?;
+    for file in dir_contents {
+        if let Ok(file) = file {
+            if let Some(file_name) = file.file_name().to_str() {
+                file_list.push(file_name.to_string());
             }
-
-            // Output entry count & entries
-            println!("Found {count} entries\n");
-            for item in final_output.iter() {
-                println!("{item}");
-            }
-        }
-        Err(e) => {
-            eprintln!("{}", e.to_string());
         }
     }
+
+    Ok(file_list)
 }
